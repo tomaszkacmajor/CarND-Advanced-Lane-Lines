@@ -2,9 +2,9 @@ import numpy as np
 import cv2
 import glob
 import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
 from moviepy.editor import VideoFileClip
-from collections import deque
+import re
+import matplotlib.cm as cm
 
 # <markdowncell>
 # ### Helper functions
@@ -72,30 +72,21 @@ def cal_undistort(img, objpoints, imgpoints):
     return undist
   
 # <markdowncell>
-# ### Perform perspective transform
+# ### Performs perspective transform
 # <codecell>
-y_level = 460  #482
+y_level = 470
 src = np.float32([[490, y_level],[810, y_level],[1250, 720],[40, 720]])
 dst = np.float32([[0, 0], [1280, 0],[1250, 720],[40, 720]])
 
 def perspective_transform(img): 
     img_size = (img.shape[1], img.shape[0])
-    #src = np.float32([[490, 482],[810, 482],[1250, 720],[40, 720]])
-    #dst = np.float32([[0, 0], [1280, 0],[1250, 720],[40, 720]])
-    #src = np.float32([[490,460],[810,460],[1250,720],[150,720]])
-    
-    #src = np.float32([[150+430,460],[1150-440,460],[1150,720],[150,720]])
-    src = np.float32([[490, 482],[810, 482],[1250, 720],[40, 720]])
-    
-    #dst = np.float32([[200, 0], [img_size[0], 0], [img_size[0], img_size[1]], [200, img_size[1]]])
-    dst = np.float32([[0, 0], [1280, 0],[1250, 720],[40, 720]])
     M = cv2.getPerspectiveTransform(src, dst)
     Minv = cv2.getPerspectiveTransform(dst, src)
     warped = cv2.warpPerspective(img, M, img_size)
     return warped, M, Minv
 
 # <markdowncell>
-# ### Pipeline to filter lanes (finding edges and colors)
+# ### Threshold functions for Sobel gradient
 # <codecell>
 # Calculate directional gradient
 def abs_sobel_thresh(gray, orient='x', sobel_kernel=3, thresh=(0, 255)):
@@ -138,7 +129,9 @@ def dir_threshold(gray, sobel_kernel=3, thresh=(0, np.pi/2)):
     dir_binary[(absgraddir > thresh[0]) & (absgraddir < thresh[1])] = 1
     return dir_binary
 
-
+# <markdowncell>
+# ### Combine Sobel gradient filter and color filter
+# <codecell>
 def apply_filters(img, show_intermediate_results=False):
     img = np.copy(img)
        
@@ -185,19 +178,11 @@ def apply_filters(img, show_intermediate_results=False):
     return  combined_binary
     
 
-
-# <markdowncell>
-# ### Main code
-# <codecell>
-
-cal_images = glob.glob('camera_cal/calibration*.jpg')
-imgpoints, objpoints = collect_calibration_points(cal_images)
-
 # <markdowncell>
 # ### Main code
 # <codecell>
     
-def warp_binary(img, show_intermediate_results = False):       
+def warp_binary(img, show_intermediate_results = False, save_out_images=False, img_name="Img"):       
     undist_img = cal_undistort(img, objpoints, imgpoints)
     if (show_intermediate_results):
         show_2_images(img, undist_img, 'Original Image', 'Undistorted Image')
@@ -208,39 +193,21 @@ def warp_binary(img, show_intermediate_results = False):
     if (show_intermediate_results):
         show_2_images(img, warped_img, 'Undistorted Image', 'Undistorted and Warped Image')
     
-    warped_img, M, Minv = perspective_transform(filtered_img_binary)
+    warped_binary_img, M, Minv = perspective_transform(filtered_img_binary)
     if (show_intermediate_results):
-        show_2_images(filtered_img_binary, warped_img, 'Binary Image', 'Warped Binary Image', gray=True)
+        show_2_images(filtered_img_binary, warped_binary_img, 'Binary Image', 'Warped Binary Image', gray=True)
 
-    return warped_img, M, Minv
+    if (save_out_images):
+        img_name = re.split("[\\\/.]+",img_name)[-2]
+       
+        cv2.imwrite("output_images/"+img_name+"_undistorted.jpg",undist_img)
+        cv2.imwrite("output_images/"+img_name+"_undistorted_and_warped.jpg",warped_img)
+        plt.imsave("output_images/"+img_name+"_binary.jpg", np.array(filtered_img_binary), cmap=cm.gray)
+        plt.imsave("output_images/"+img_name+"_warped_binary.jpg", np.array(warped_binary_img), cmap=cm.gray)
+      
 
-# <markdowncell>
-# ### Main code
-# <codecell>
-img = cv2.imread('test_images/test1.jpg')
+    return warped_binary_img, M, Minv
 
-undist_img = cal_undistort(img, objpoints, imgpoints)    
-filtered_img_binary = apply_filters(undist_img)     
-warped_img, M, Minv = perspective_transform(undist_img)
-warped_img, M, Minv = perspective_transform(filtered_img_binary)
-
-
-# <markdowncell>
-# ### Main code
-# <codecell>
-
-
-for image_name in glob.glob('test_images/test*.jpg'):
-    img = cv2.imread(image_name)
-    result, M, Minv = warp_binary(img)
-    
-    f, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
-    f.tight_layout()
-    ax1.imshow(conv2RGB(img))
-    ax2.imshow(result,cmap='gray')
-    ax1.set_title('img', fontsize=15)    
-    ax2.set_title('result', fontsize=15)
-    plt.subplots_adjust(left=0., right=1, top=0.9, bottom=0.)
 
 # <markdowncell>
 # ### Main code
@@ -346,66 +313,9 @@ def fit_lanes(binary_warped, show_intermediate_results=False):
         plt.plot(right_fitx, ploty, color='yellow')
         plt.xlim(0, 1280)
         plt.ylim(720, 0)
-
+    
     return ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx
     
-# <markdowncell>
-# ### Main code
-# <codecell>
-# Assume you now have a new warped binary image 
-# from the next frame of video (also called "binary_warped")
-# It's now much easier to find line pixels!
-
-#nonzero = binary_warped.nonzero()
-#nonzeroy = np.array(nonzero[0])
-#nonzerox = np.array(nonzero[1])
-#margin = 100
-#left_lane_inds = ((nonzerox > (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] - margin)) & (nonzerox < (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] + margin))) 
-#right_lane_inds = ((nonzerox > (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] - margin)) & (nonzerox < (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] + margin)))  
-#
-## Again, extract left and right line pixel positions
-#leftx = nonzerox[left_lane_inds]
-#lefty = nonzeroy[left_lane_inds] 
-#rightx = nonzerox[right_lane_inds]
-#righty = nonzeroy[right_lane_inds]
-## Fit a second order polynomial to each
-#left_fit = np.polyfit(lefty, leftx, 2)
-#right_fit = np.polyfit(righty, rightx, 2)
-## Generate x and y values for plotting
-#ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0] )
-#left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
-#right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
-#
-## <markdowncell>
-## ### Main code
-## <codecell>
-#
-## Create an image to draw on and an image to show the selection window
-#out_img = np.dstack((binary_warped, binary_warped, binary_warped))*255
-#window_img = np.zeros_like(out_img)
-## Color in left and right line pixels
-#out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
-#out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
-#
-## Generate a polygon to illustrate the search window area
-## And recast the x and y points into usable format for cv2.fillPoly()
-#left_line_window1 = np.array([np.transpose(np.vstack([left_fitx-margin, ploty]))])
-#left_line_window2 = np.array([np.flipud(np.transpose(np.vstack([left_fitx+margin, ploty])))])
-#left_line_pts = np.hstack((left_line_window1, left_line_window2))
-#right_line_window1 = np.array([np.transpose(np.vstack([right_fitx-margin, ploty]))])
-#right_line_window2 = np.array([np.flipud(np.transpose(np.vstack([right_fitx+margin, ploty])))])
-#right_line_pts = np.hstack((right_line_window1, right_line_window2))
-#
-## Draw the lane onto the warped blank image
-#cv2.fillPoly(window_img, np.int_([left_line_pts]), (0,255, 0))
-#cv2.fillPoly(window_img, np.int_([right_line_pts]), (0,255, 0))
-#result = cv2.addWeighted(out_img, 1, window_img, 0.3, 0)
-#plt.imshow(result)
-#plt.plot(left_fitx, ploty, color='yellow')
-#plt.plot(right_fitx, ploty, color='yellow')
-#plt.xlim(0, 1280)
-#plt.ylim(720, 0)
-
 # <markdowncell>
 # ### Main code
 # <codecell>
@@ -463,69 +373,47 @@ def calc_curvature_and_return_final_img(img, binary_warped, ploty, lefty, righty
 
     return result
     
-#plt.text(200, 175, 'Radius of curvature is {}m'.format(int((left_curverad + right_curverad)/2)),
-#         style='italic', color='white', fontsize=10)
-# <markdowncell>
-# ### Main code
-# <codecell>
-# Define a class to receive the characteristics of each line detection
-class Line():
-    def __init__(self):
-        # was the line detected in the last iteration?
-        self.detected = False  
-        # x values of the last n fits of the line
-        self.recent_xfitted = [] 
-        #average x values of the fitted line over the last n iterations
-        self.bestx = None     
-        #polynomial coefficients averaged over the last n iterations
-        self.best_fit = None  
-        #polynomial coefficients for the most recent fit
-        self.current_fit = [np.array([False])]  
-        #radius of curvature of the line in some units
-        self.radius_of_curvature = None 
-        #distance in meters of vehicle center from the line
-        self.line_base_pos = None 
-        #difference in fit coefficients between last and new fits
-        self.diffs = np.array([0,0,0], dtype='float') 
-        #x values for detected line pixels
-        self.allx = None  
-        #y values for detected line pixels
-        self.ally = None
-        
-    def first_search(self, x, y, image):
-        allx = []
-        yvals = []
-        if self.detected == False: 
-            i = 720
-            j = 630
-            while j >= 0:
-                histogram = np.sum(image[j:i,:], axis=0)
-                if self == Right:
-                    peak = np.argmax(histogram[640:]) + 640
-                else:
-                    peak = np.argmax(histogram[:640])
-                x_idx = np.where((((peak - 25) < x)&(x < (peak + 25))&((y > j) & (y < i))))
-                x_window, y_window = x[x_idx], y[x_idx]
-                if np.sum(x_window) != 0:
-                    allx.extend(x_window)
-                    yvals.extend(y_window)
-                i -= 90
-                j -= 90
-        if np.sum(allx) > 0:
-            self.detected = True
-        else:
-            ally = self.Y
-            allx = self.X
-        return allx, ally, self.detected
- 
 # <markdowncell>
 # ### Main code
 # <codecell>       
-def process_video(img):
+def process_pipeline(img):
     warp_binary_img, M, Minv = warp_binary(img)
     ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx = fit_lanes(warp_binary_img)
     return calc_curvature_and_return_final_img(img, warp_binary_img, ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx, Minv)
     
+
+# <markdowncell>
+# ### Main code
+# <codecell>
+
+cal_images = glob.glob('camera_cal/calibration*.jpg')
+imgpoints, objpoints = collect_calibration_points(cal_images)
+
+
+# <markdowncell>
+# ### Process each image in test_images folder - save results
+# <codecell>
+
+for image_name in glob.glob('test_images/test*.jpg'):
+    img = cv2.imread(image_name)
+    warp_binary_img, M, Minv = warp_binary(img, False, True, image_name)
+    ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx = fit_lanes(warp_binary_img, True)
+    final_image = calc_curvature_and_return_final_img(img, warp_binary_img, ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx, Minv, False)
+    
+    image_name = re.split("[\\\/.]+",image_name)[-2]
+    cv2.imwrite("output_images/"+image_name+"_final.jpg",final_image)
+    
+    fig = plt.figure(figsize = (8,4))
+    plt.imshow(conv2RGB(final_image)) 
+
+# <markdowncell>
+# ### Process one test image
+# <codecell>
+img = cv2.imread('test_images/test2.jpg')
+img_processed = process_pipeline(img)
+fig = plt.figure(figsize = (8,4))
+plt.imshow(conv2RGB(img_processed))        
+
 # <markdowncell>
 # ### Main code
 # <codecell>
@@ -537,7 +425,7 @@ from IPython import get_ipython
 
 video_output = 'project_video_output.mp4'
 clip1 = VideoFileClip("project_video.mp4")
-white_clip = clip1.fl_image(process_video) #NOTE: this function expects color images!!
+white_clip = clip1.fl_image(process_pipeline) #NOTE: this function expects color images!!
 get_ipython().magic('time white_clip.write_videofile(video_output, audio=False)')
 #%time white_clip.write_videofile(white_output, audio=False)
         
