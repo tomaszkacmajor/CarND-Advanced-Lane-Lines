@@ -19,79 +19,111 @@ I start by preparing "object points", which will be the (x, y, z) coordinates of
 
 I then used the output `objpoints` and `imgpoints` to compute the camera calibration and distortion coefficients using the `cv2.calibrateCamera()` function.  I applied this distortion correction to the test image using the `cv2.undistort()` function and obtained this result: 
 
-<img src="./output_images/solidWhiteCurve_1_original.jpg" height="160">
+<img src="./writeup_images/Undistortion_chess_example.jpg" >
 
 ### Pipeline (single images)
 
-#### 1. Provide an example of a distortion-corrected image.
+#### 1. Distortion correction
 
-To demonstrate this step, I will describe how I apply the distortion correction to one of the test images like this one:
-![alt text][image2]
+Similarly, like in previous step, I used `objpoints` and `imgpoints` to undistort one of the test images. The result can be seen below:
+<img src="./writeup_images/Undistortion_test_image.jpg" >
 
-#### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
+#### 2. Create a thresholded binary image.
+I used a combination of gradient and color thresholds to generate a binary image (thresholding steps at lines 99 through 188 in `FindLanes.py`). 
 
-I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at lines # through # in `another_file.py`).  Here's an example of my output for this step.  (note: this is not actually from one of the test images)
+After Gaussian blur and grayscaling I computed Sobel gradients in x and y directions. Below, binary outputs after filtering these gradients in certain ranges (x direction thresholds - (10, 255), y direction thresholds - (150, 255))
 
-![alt text][image3]
+<img src="./writeup_images/Gradients1.jpg" >
 
-#### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
+I also produced binary images derived from filtering Sobel gradient magnitude and direction (magnitude threshold - (80, 255), direction threshold - (.7, 1.3)). Then, I decided that, for the final result, good combination of gradient filters would be a logical AND of *x direction*, *magnitude* and *directional* gradient.
 
-The code for my perspective transform includes a function called `warper()`, which appears in lines 1 through 8 in the file `example.py` (output_images/examples/example.py) (or, for example, in the 3rd code cell of the IPython notebook).  The `warper()` function takes as inputs an image (`img`), as well as source (`src`) and destination (`dst`) points.  I chose the hardcode the source and destination points in the following manner:
+<img src="./writeup_images/Gradients2.jpg" >
+
+Let's see how the example image looks after dividing it into 3 channels from HSL color space.
+
+<img src="./writeup_images/HSL_channels.jpg" >
+
+H and S components seem to be attractive for color filtering. Below, you can see filtering of these components in thresholds (170, 255) for H channel and (10, 100) for S channel. Finally I decided to use only the S channel filter and to perform logical OR on this color filter and previously calculated gradient binary image.
+
+<img src="./writeup_images/HSL_channels_binary.jpg" >
+
+#### 3. Perspective transform.
+
+The code for my perspective transform includes a function called `perspective_transform()`, which appears in lines 80 through 93 in the file `FindLanes.py`. I chose the hardcode the source (`src`) and destination (`dst`) points inside this funcion in the following manner:
 
 ```python
+height =  img.shape[0]
+y_level = 0.64 * height
+top_offset = 100
+side_offset = 250
+
 src = np.float32(
-    [[(img_size[0] / 2) - 55, img_size[1] / 2 + 100],
-    [((img_size[0] / 6) - 10), img_size[1]],
-    [(img_size[0] * 5 / 6) + 60, img_size[1]],
-    [(img_size[0] / 2 + 55), img_size[1] / 2 + 100]])
+    [[575, y_level],
+    [710, y_level],
+    [1130, height],
+    [210, height]])
 dst = np.float32(
-    [[(img_size[0] / 4), 0],
-    [(img_size[0] / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), 0]])
+    [[side_offset, top_offset], 
+    [1280-side_offset, top_offset],
+    [1280-side_offset, height],
+    [side_offset, height]])
 ```
 
 This resulted in the following source and destination points:
 
 | Source        | Destination   | 
 |:-------------:|:-------------:| 
-| 585, 460      | 320, 0        | 
-| 203, 720      | 320, 720      |
-| 1127, 720     | 960, 720      |
-| 695, 460      | 960, 0        |
+| 575, 461      | 250, 100      | 
+| 710, 461      | 1030, 100     |
+| 1130, 720     | 1030, 720     |
+| 210, 720      | 250, 720      |
 
 I verified that my perspective transform was working as expected by drawing the `src` and `dst` points onto a test image and its warped counterpart to verify that the lines appear parallel in the warped image.
 
-![alt text][image4]
+<img src="./writeup_images/warping_straight_line.jpg">
 
-#### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
+Below, there is an example of the test image and perspective transform using the same `src` and `dst` points.
 
-Then I did some other stuff and fit my lane lines with a 2nd order polynomial kinda like this:
+<img src="./writeup_images/Warping_example.jpg">
 
-![alt text][image5]
+We can see that the distances between transformed lanes are more or less the same as well as the curvature, so this may confirm the correctness of the perspective transform.
 
-#### 5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
+#### 4. Lane-line pixels identification and polynomial fit.
 
-I did this in lines # through # in my code in `my_other_file.py`
+To compute the polynomial fit of the left and right lane we should firstly obtain warped image our thresholded binary image.
 
-#### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
+<img src="./writeup_images/Warping_binary_example.jpg">
 
-I implemented this step in lines # through # in my code in `yet_another_file.py` in the function `map_lane()`.  Here is an example of my result on a test image:
+Now, the `fit_lanes()` function is called (in lines 222 through 325 in the file `FindLanes.py`). Firstly, we take a histogram along all the columns in the lower half of the image. The two highest peaks in this histogram will be good indicators of the x-position of the base of the lane lines. From that point, I can use a sliding window, placed around the line centers, to find and follow the lines up to the top of the frame.
+The output of this operation is below. Boxes indicate regions where lane pixels were found in the corresponding sliding window.
 
-![alt text][image6]
+<img src="./writeup_images/poly_fit_example.jpg">
 
----
+#### 5. Curvature calculation and vehicle position.
+
+The curvature radius is computed by the `calc_curvature_and_return_final_img()` function in lines 492 through 525 in the file `FindLanes.py`. For a second order polynomial f(y)=A y^2 +B y + C the radius of curvature is given by R = [(1+(2 Ay +B)^2 )^3/2]/|2A|. Then, to convert this result to the real world space I defined conversions assigning:
+30/720 meters per pixel in y dimension and
+3.7/700 meters per pixel in x dimension
+
+The distance from the center of the lane is computed in lines 509 through 511 in the file `FindLanes.py`. It computes the distance from the center of the image to the center of lane lines at the bottom of the picture - using previously found poynomial fit lines.
+
+#### 6. Plotting the projection back on the original image.
+
+I implemented this step in lines 514 through 535 in my code in `FindLanes.py`. Here is an example of my result on a test image:
+
+<img src="./writeup_images/final_output_example.jpg">
 
 ### Pipeline (video)
 
-#### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
+In addition to the described pipeline, during video processing I applied following features:
+* Finding the lane pixels based on previous frame result - it's implemented in function `fit_lanes2()` - lines from 331 to 387, where we just search in a margin around the previous line position. 
+* Averaging the result - To make the result smooth I use weighted average over last 9 frames. 
+* Sanity check - I check if the first coefficient of the left and right polynomials are of the same sign. If not, the current result is disregarded and the averaged result in memory is taken.
 
-Here's a [link to my video result](./project_video.mp4)
+Here's a [link to my video result](./project_video_output.mp4)
 
----
 
 ### Discussion
 
-#### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
 Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
