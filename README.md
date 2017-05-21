@@ -78,7 +78,7 @@ This resulted in the following source and destination points:
 | 1130, 720     | 1030, 720     |
 | 210, 720      | 250, 720      |
 
-I verified that my perspective transform was working as expected by drawing the `src` and `dst` points onto a test image and its warped counterpart to verify that the lines appear parallel in the warped image.
+I verified that my perspective transform was working as expected by drawing the `src` onto the image with straight lines and its warped counterpart. We can see that the lines appear parallel in the warped image and that they are parallel to the lanes.
 
 <img src="./writeup_images/warping_straight_line.jpg">
 
@@ -109,9 +109,9 @@ The distance from the center of the lane is computed in lines 509 through 511 in
 
 #### 6. Plotting the projection back on the original image.
 
-I implemented this step in lines 514 through 535 in my code in `FindLanes.py`. Here is an example of my result on a test image:
+I implemented this step in lines 514 through 535 in my code in `FindLanes.py`. Here is a set of results of processing test images (undistorted image, transofrmed, lines projected back):
 
-<img src="./writeup_images/final_output_example.jpg">
+<img src="./writeup_images/final_results.jpg">
 
 ### Pipeline (video)
 
@@ -125,5 +125,4 @@ Here's a [link to my video result](./project_video_output.mp4)
 
 ### Discussion
 
-
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
+In my opinion there were 2 crucial steps to fine tune: obtaining good binary threshold image and defining `src` and `dst` points in order to properly transform images. I did many trials and even after some compromise I sometimes got irrevelant results due to shadows or unability to find lane pixels. That's why I added an averaging for the video processing to smooth the results over time. The results seem to ok in general, but in the real world we would probably need to define `src` and `dst` parameters in smarter way and measure meters/pixel to obtain more accurate curvature and center shift. 
