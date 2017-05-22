@@ -147,13 +147,13 @@ def apply_filters(img, show_intermediate_results=False):
     # Define sobel kernel size
     ksize = 7
     # Apply each of the thresholding functions
-    gradx = abs_sobel_thresh(gray, orient='x', sobel_kernel=ksize, thresh=(10, 255))
+    gradx = abs_sobel_thresh(gray, orient='x', sobel_kernel=ksize, thresh=(30, 255))
     grady = abs_sobel_thresh(gray, orient='y', sobel_kernel=ksize, thresh=(150, 255))
-    mag_binary = mag_thresh(gray, sobel_kernel=ksize, mag_thresh=(80, 255))
-    dir_binary = dir_threshold(gray, sobel_kernel=ksize, thresh=(.7, 1.3))
+    mag_binary = mag_thresh(gray, sobel_kernel=ksize, mag_thresh=(30, 255))
+    dir_binary = dir_threshold(gray, sobel_kernel=ksize, thresh=(0.7, 1.3))
     # Combine all the thresholding information
-    gradient_combined = np.zeros_like(dir_binary)
-    gradient_combined[((gradx == 1) & (mag_binary == 1) & (dir_binary == 1)) ] = 1
+    gradient_combined = np.zeros_like(gradx)
+    gradient_combined[( (mag_binary == 1) & (gradx == 1) & (dir_binary ==1)) ] = 1
     
     if (show_intermediate_results):
         show_3_gray_images(gray, gradx, grady, 'Gray image', 'Gradient x direction', 'Gradient y direction')
@@ -167,21 +167,26 @@ def apply_filters(img, show_intermediate_results=False):
     if (show_intermediate_results):
         show_3_gray_images(h_channel, s_channel, l_channel, 'H channel', 'S channel', 'L channel')
        
+    h_thresh=(15, 45)
+    h_binary = np.zeros_like(h_channel)
+    h_binary[(h_channel >= h_thresh[0]) & (h_channel <= h_thresh[1])] = 1
+    
     # Threshold color channels
-    s_thresh=(170, 255)
+    s_thresh=(150, 255)
     s_binary = np.zeros_like(s_channel)
     s_binary[(s_channel >= s_thresh[0]) & (s_channel <= s_thresh[1])] = 1
    
-    h_thresh=(10, 100)
-    h_binary = np.zeros_like(h_channel)
-    h_binary[(h_channel >= h_thresh[0]) & (h_channel <= h_thresh[1])] = 1
+    l_thresh=(240, 255)
+    l_binary = np.zeros_like(l_channel)
+    l_binary[(l_channel >= l_thresh[0]) & (l_channel <= l_thresh[1])] = 1
+   
      
     # Combine the two binary thresholds
     combined_binary = np.zeros_like(gray)
-    combined_binary[(gradient_combined == 1) | (s_binary == 1) ] = 1
+    combined_binary[(gradient_combined == 1) | ((s_binary == 1) & (h_binary == 1)) | (l_binary == 1) ] = 1
   
     if (show_intermediate_results):
-        show_3_gray_images(h_binary, s_binary, combined_binary, 'H channel binary', 'S channel binary', 'Finally Filtered Image Binary')
+        show_3_gray_images(h_binary, s_binary, l_binary, 'H channel binary', 'S channel binary', 'L channel binary')
     
     return  combined_binary
     
@@ -205,11 +210,15 @@ def warp_binary(img, show_intermediate_results = False, save_out_images=False, i
     if (show_intermediate_results):
         show_2_images(filtered_img_binary, warped_binary_img, 'Binary Image', 'Warped Binary Image', gray=True)
 
+#    warped_binary_img = apply_filters(warped_img, show_intermediate_results)
+#    if (show_intermediate_results):
+#        show_2_images(warped_img, warped_binary_img, 'Warped Image', 'Warped Filtered Image', gray=True)
+
     if (save_out_images):
         img_name = re.split("[\\\/.]+",img_name)[-2]
        
-        cv2.imwrite("output_images/"+img_name+"_undistorted.jpg",undist_img)
-        cv2.imwrite("output_images/"+img_name+"_undistorted_and_warped.jpg",warped_img)
+        cv2.imwrite("output_images/"+img_name+"_undistorted.jpg",conv2RGB(undist_img))
+        cv2.imwrite("output_images/"+img_name+"_undistorted_and_warped.jpg",conv2RGB(warped_img))
         plt.imsave("output_images/"+img_name+"_binary.jpg", np.array(filtered_img_binary), cmap=cm.gray)
         plt.imsave("output_images/"+img_name+"_warped_binary.jpg", np.array(warped_binary_img), cmap=cm.gray)
       
@@ -227,7 +236,7 @@ def fit_lanes(binary_warped, show_intermediate_results=False):
     if (show_intermediate_results):
         f, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
         f.tight_layout()
-        ax1.imshow(conv2RGB(img))
+        ax1.imshow(img)
         ax2.imshow(binary_warped,cmap='gray')
         ax1.set_title('img', fontsize=15)    
         ax2.set_title('binary_warped', fontsize=15)
@@ -320,7 +329,7 @@ def fit_lanes(binary_warped, show_intermediate_results=False):
     
     initial_fit_done = True
     
-    initialize_averaged_line_params(lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx)
+#    initialize_averaged_line_params(lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx)
     
     return ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx
 
@@ -381,10 +390,10 @@ def fit_lanes2(binary_warped, show_intermediate_results=False):
         plt.ylim(720, 0)
     
     # If the fits seem to be OK, put current values to averaging variables
-    if sanity_check(left_fit, right_fit):
-        lines_averaging(lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx)
+#    if sanity_check(left_fit, right_fit):
+#        lines_averaging(lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx)
 
-    return ploty
+    return ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx
 
 # <markdowncell>
 # ### Line averaging operations
@@ -393,89 +402,91 @@ def fit_lanes2(binary_warped, show_intermediate_results=False):
 def get_running_average(avg_val, cur_val):
     param1 = 0.9
     param2 = 0.1
-    if (avg_val.shape!=cur_val.shape):
-        min_len = min(avg_val.shape[0], cur_val.shape[0])
-        avg_val = avg_val[:min_len]
-        cur_val = cur_val[:min_len]
+#    if (avg_val.shape!=cur_val.shape):
+#        min_len = min(avg_val.shape[0], cur_val.shape[0])
+#        avg_val = avg_val[:min_len]
+#        cur_val = cur_val[:min_len]
         
     return avg_val * param1 + cur_val * param2
-
-def initialize_averaged_line_params(lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx):
-    global lefty_avg
-    global righty_avg
-    global leftx_avg
-    global rightx_avg
-    global left_fit_avg
-    global right_fit_avg 
-    global left_fitx_avg 
-    global right_fitx_avg
-    
-    lefty_avg = lefty
-    righty_avg = righty
-    leftx_avg = leftx
-    rightx_avg = rightx
-    left_fit_avg = left_fit
-    right_fit_avg = right_fit
-    left_fitx_avg = left_fitx
-    right_fitx_avg = right_fitx    
-    
-def lines_averaging(lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx):
-    global lefty_avg
-    global righty_avg
-    global leftx_avg
-    global rightx_avg
-    global left_fit_avg
-    global right_fit_avg 
-    global left_fitx_avg 
-    global right_fitx_avg
-    
-    lefty_avg = get_running_average(lefty_avg, lefty)
-    righty_avg = get_running_average(righty_avg, righty)
-    leftx_avg = get_running_average(leftx_avg, leftx)
-    rightx_avg = get_running_average(rightx_avg, rightx)
-    left_fit_avg = get_running_average(left_fit_avg, left_fit)
-    right_fit_avg = get_running_average(right_fit_avg, right_fit)
-    left_fitx_avg = get_running_average(left_fitx_avg, left_fitx,)
-    right_fitx_avg = get_running_average(right_fitx_avg, right_fitx)
- 
-def get_averaged_line_params():
-    global lefty_avg
-    global righty_avg
-    global leftx_avg
-    global rightx_avg
-    global left_fit_avg
-    global right_fit_avg 
-    global left_fitx_avg 
-    global right_fitx_avg
-    
-    return (lefty_avg, righty_avg, leftx_avg, rightx_avg, left_fit_avg, right_fit_avg, left_fitx_avg, right_fitx_avg)
+#
+#def initialize_averaged_line_params(lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx):
+#    global lefty_avg
+#    global righty_avg
+#    global leftx_avg
+#    global rightx_avg
+#    global left_fit_avg
+#    global right_fit_avg 
+#    global left_fitx_avg 
+#    global right_fitx_avg
+#    
+#    lefty_avg = lefty
+#    righty_avg = righty
+#    leftx_avg = leftx
+#    rightx_avg = rightx
+#    left_fit_avg = left_fit
+#    right_fit_avg = right_fit
+#    left_fitx_avg = left_fitx
+#    right_fitx_avg = right_fitx    
+#    
+#def lines_averaging(lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx):
+#    global lefty_avg
+#    global righty_avg
+#    global leftx_avg
+#    global rightx_avg
+#    global left_fit_avg
+#    global right_fit_avg 
+#    global left_fitx_avg 
+#    global right_fitx_avg
+#    
+#    lefty_avg = get_running_average(lefty_avg, lefty)
+#    righty_avg = get_running_average(righty_avg, righty)
+#    leftx_avg = get_running_average(leftx_avg, leftx)
+#    rightx_avg = get_running_average(rightx_avg, rightx)
+#    left_fit_avg = get_running_average(left_fit_avg, left_fit)
+#    right_fit_avg = get_running_average(right_fit_avg, right_fit)
+#    left_fitx_avg = get_running_average(left_fitx_avg, left_fitx,)
+#    right_fitx_avg = get_running_average(right_fitx_avg, right_fitx)
+# 
+#def get_averaged_line_params():
+#    global lefty_avg
+#    global righty_avg
+#    global leftx_avg
+#    global rightx_avg
+#    global left_fit_avg
+#    global right_fit_avg 
+#    global left_fitx_avg 
+#    global right_fitx_avg
+#    
+#    return (lefty_avg, righty_avg, leftx_avg, rightx_avg, left_fit_avg, right_fit_avg, left_fitx_avg, right_fitx_avg)
     
     
 # <markdowncell>
 # ### Initialize global variables
 # <codecell>
 
-global initial_fit_done
-global left_fit
-global right_fit
-
-global lefty_avg
-global righty_avg
-global leftx_avg
-global rightx_avg
-global left_fit_avg
-global right_fit_avg 
-global left_fitx_avg 
-global right_fitx_avg
+#global initial_fit_done
+#global left_fit
+#global right_fit
+#
+#global lefty_avg
+#global righty_avg
+#global leftx_avg
+#global rightx_avg
+#global left_fit_avg
+#global right_fit_avg 
+#global left_fitx_avg 
+#global right_fitx_avg
 
 initial_fit_done=False
 left_fit=0.0
 right_fit=0.0
+curvature_avg = 0
 
 def initialize_global_vars():
     global initial_fit_done
+    global curvature_avg
     initial_fit_done = False
-    
+    curvature_avg = 0
     
 # <markdowncell>
 # ### Check whether the first coefficients of left and right fit are of the same sign
@@ -491,6 +502,7 @@ def sanity_check(left_fit, right_fit):
 # <codecell>
 def calc_curvature_and_return_final_img(img, binary_warped, ploty, lefty, righty, leftx, rightx, 
                    left_fit, right_fit, left_fitx, right_fitx, Minv, show_intermediate_results=False):
+    global curvature_avg
     height = img.shape[0]
     ym_per_pix = 30/height # meters per pixel in y dimension
     xm_per_pix = 3.7/700 # meters per pixel in x dimension
@@ -521,10 +533,19 @@ def calc_curvature_and_return_final_img(img, binary_warped, ploty, lefty, righty
     newwarp = cv2.warpPerspective(color_warp, Minv, (binary_warped.shape[1], binary_warped.shape[0]))
     result = cv2.addWeighted(img, 1, newwarp, 0.5, 0)
     
+    curvature = int((left_curverad + right_curverad)/2)
+    if (curvature_avg==0):
+        curvature_avg = curvature
+    else:
+        curvature_avg = int(get_running_average(curvature_avg, curvature))
+    
     font = cv2.FONT_HERSHEY_SIMPLEX
     #text_radius = 'Radius of curvature is {}m'.format(int(min(left_curverad, right_curverad)))
-    text_radius = 'Radius of curvature is {}m'.format(int((left_curverad + right_curverad)/2))
+    text_radius = 'Radius of curvature is {}m'.format(curvature_avg)
     cv2.putText(result,text_radius,(200,100), font, 1,(255,255,255),2)
+    
+#    cv2.putText(result,'Left: {}m, right {}m'.format(left_curverad, right_curverad),(200,250), font, 1,(255,255,255),2)
+    
     
     
     if center < 640:
@@ -536,30 +557,41 @@ def calc_curvature_and_return_final_img(img, binary_warped, ploty, lefty, righty
         
     if (show_intermediate_results):
         fig = plt.figure(figsize = (6,3))
-        plt.imshow(conv2RGB(result))        
+        plt.imshow((result))
         plt.text(200, 100, text_position,
         style='italic', color='white', fontsize=10)       
         plt.text(200, 175, text_radius, style='italic', color='white', fontsize=10)
       
+   
 
     return result
     
 # <markdowncell>
 # ### Main pipeline
 # <codecell>       
+count = 1
+
 def process_pipeline(img):
     global initial_fit_done
     global left_fit
     global right_fit
+    global count
+   
     warp_binary_img, M, Minv = warp_binary(img)
-    if (initial_fit_done==False):
-        ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx = fit_lanes(warp_binary_img)
-    else:
-        ploty = fit_lanes2(warp_binary_img)
+#    if (initial_fit_done==False):
+    ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx = fit_lanes(warp_binary_img)
+#    else:
+#        ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx = fit_lanes2(warp_binary_img)
+
+
+#        ploty = fit_lanes2(warp_binary_img)
     
-    lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx = get_averaged_line_params()
+#    lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx = get_averaged_line_params()
     
-    return calc_curvature_and_return_final_img(img, warp_binary_img, ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx, Minv)
+    result = calc_curvature_and_return_final_img(img, warp_binary_img, ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx, Minv)
+    count = count + 1
+    
+    return result
     
 
 # <markdowncell>
@@ -572,6 +604,7 @@ imgpoints, objpoints = collect_calibration_points(cal_images)
 
 test_image = 'camera_cal/calibration5.jpg'
 img = cv2.imread(test_image)
+img = conv2RGB(img)
 undist_img = cal_undistort(img, objpoints, imgpoints)
 show_2_images(img, undist_img, "Original image", "Undistorted image")
 
@@ -581,52 +614,75 @@ show_2_images(img, undist_img, "Original image", "Undistorted image")
 
 for image_name in glob.glob('test_images/test*.jpg'):
     img = cv2.imread(image_name)
+    img=conv2RGB(img)
     warp_binary_img, M, Minv = warp_binary(img, False, True, image_name)
     ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx = fit_lanes(warp_binary_img, True)
     final_image = calc_curvature_and_return_final_img(img, warp_binary_img, ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx, Minv, False)
     
     image_name = re.split("[\\\/.]+",image_name)[-2]
-    cv2.imwrite("output_images/"+image_name+"_final.jpg",final_image)
+    cv2.imwrite("output_images/"+image_name+"_final.jpg",conv2RGB(final_image))
     
     fig = plt.figure(figsize = (8,4))
-    plt.imshow(conv2RGB(final_image)) 
+    plt.imshow(final_image)
 
 # <markdowncell>
 # ### Process one test image
 # <codecell>
-img = cv2.imread('test_images/test_from_vid8.png')
+img = cv2.imread('test_images/test_video3.png')
 img_processed = process_pipeline(img)
 fig = plt.figure(figsize = (8,4))
-plt.imshow(conv2RGB(img_processed))        
+plt.imshow(img_processed)
+
+
+# <markdowncell>
+# ### Process one test image
+# <codecell>
+initialize_global_vars()
+
+
+for image_name in glob.glob('test_images/test_video*.png'):
+    img = cv2.imread(image_name)
+    img=conv2RGB(img)
+    img_processed = process_pipeline(img)
+    fig = plt.figure(figsize = (8,4))
+    plt.imshow(img_processed) 
 
 # <markdowncell>
 # ### Process one test image
 # <codecell>
 image_name='test_images/straight_lines1.jpg'
 #image_name='test_images/test_from_vid11.png'
-image_name='test_images/test4.jpg'
+image_name='test_images/test5.jpg'
+image_name='test_images/test_video19.png'
 img = cv2.imread(image_name)
+img=conv2RGB(img)
 warp_binary_img, M, Minv = warp_binary(img, True, False, image_name)
 
 ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx = fit_lanes(warp_binary_img, True)
+
+#ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx  = fit_lanes2(warp_binary_img)
+#lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx = get_averaged_line_params()
+
 final_image = calc_curvature_and_return_final_img(img, warp_binary_img, ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx, Minv, False)
 
 fig = plt.figure(figsize = (8,4))
-plt.imshow(conv2RGB(final_image)) 
+plt.imshow(final_image)
 #    
     
 # <markdowncell>
 # ### Process video stream
 # <codecell>
 ### Import everything needed to edit/save/watch video clips
-from moviepy.editor import VideoFileClip
-from IPython.display import HTML
-from IPython import get_ipython
+#from moviepy.editor import VideoFileClip
+#from IPython.display import HTML
+#from IPython import get_ipython
 # Set up lines for left and right
 initialize_global_vars()
 video_output = 'project_video_output.mp4'
 clip1 = VideoFileClip("project_video.mp4")
 white_clip = clip1.fl_image(process_pipeline) #NOTE: this function expects color images!!
-get_ipython().magic('time white_clip.write_videofile(video_output, audio=False)')
-#%time white_clip.write_videofile(white_output, audio=False)
+
+#get_ipython().magic('time white_clip.write_videofile(video_output, audio=False)')
+white_clip.write_videofile(video_output, audio=False)
         
+    
