@@ -210,10 +210,6 @@ def warp_binary(img, show_intermediate_results = False, save_out_images=False, i
     if (show_intermediate_results):
         show_2_images(filtered_img_binary, warped_binary_img, 'Binary Image', 'Warped Binary Image', gray=True)
 
-#    warped_binary_img = apply_filters(warped_img, show_intermediate_results)
-#    if (show_intermediate_results):
-#        show_2_images(warped_img, warped_binary_img, 'Warped Image', 'Warped Filtered Image', gray=True)
-
     if (save_out_images):
         img_name = re.split("[\\\/.]+",img_name)[-2]
        
@@ -328,154 +324,22 @@ def fit_lanes(binary_warped, show_intermediate_results=False):
         plt.ylim(720, 0)
     
     initial_fit_done = True
-    
-#    initialize_averaged_line_params(lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx)
-    
-    return ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx
-
-# <markdowncell>
-# ### Find coefficients and fit poly line to lanes - based on previously found line fits
-# <codecell>
-
-def fit_lanes2(binary_warped, show_intermediate_results=False):  
-    global initial_fit_done
-    global left_fit
-    global right_fit
-    
-    nonzero = binary_warped.nonzero()
-    nonzeroy = np.array(nonzero[0])
-    nonzerox = np.array(nonzero[1])
-    margin = 100
-    left_lane_inds = ((nonzerox > (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] - margin)) & (nonzerox < (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] + margin))) 
-    right_lane_inds = ((nonzerox > (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] - margin)) & (nonzerox < (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] + margin)))  
-    
-    # Again, extract left and right line pixel positions
-    leftx = nonzerox[left_lane_inds]
-    lefty = nonzeroy[left_lane_inds] 
-    rightx = nonzerox[right_lane_inds]
-    righty = nonzeroy[right_lane_inds]
-    # Fit a second order polynomial to each
-    left_fit = np.polyfit(lefty, leftx, 2)
-    right_fit = np.polyfit(righty, rightx, 2)
-    # Generate x and y values for plotting
-    ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0] )
-    left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
-    right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
-    
-    if (show_intermediate_results):
-        # Create an image to draw on and an image to show the selection window
-        out_img = np.dstack((binary_warped, binary_warped, binary_warped))*255
-        window_img = np.zeros_like(out_img)
-        # Color in left and right line pixels
-        out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
-        out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
-        
-        # Generate a polygon to illustrate the search window area
-        # And recast the x and y points into usable format for cv2.fillPoly()
-        left_line_window1 = np.array([np.transpose(np.vstack([left_fitx-margin, ploty]))])
-        left_line_window2 = np.array([np.flipud(np.transpose(np.vstack([left_fitx+margin, ploty])))])
-        left_line_pts = np.hstack((left_line_window1, left_line_window2))
-        right_line_window1 = np.array([np.transpose(np.vstack([right_fitx-margin, ploty]))])
-        right_line_window2 = np.array([np.flipud(np.transpose(np.vstack([right_fitx+margin, ploty])))])
-        right_line_pts = np.hstack((right_line_window1, right_line_window2))
-        
-        # Draw the lane onto the warped blank image
-        cv2.fillPoly(window_img, np.int_([left_line_pts]), (0,255, 0))
-        cv2.fillPoly(window_img, np.int_([right_line_pts]), (0,255, 0))
-        result = cv2.addWeighted(out_img, 1, window_img, 0.3, 0)
-        plt.imshow(result)
-        plt.plot(left_fitx, ploty, color='yellow')
-        plt.plot(right_fitx, ploty, color='yellow')
-        plt.xlim(0, 1280)
-        plt.ylim(720, 0)
-    
-    # If the fits seem to be OK, put current values to averaging variables
-#    if sanity_check(left_fit, right_fit):
-#        lines_averaging(lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx)
 
     return ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx
 
 # <markdowncell>
-# ### Line averaging operations
+# ### Averaging operations
 # <codecell>
 
 def get_running_average(avg_val, cur_val):
     param1 = 0.9
     param2 = 0.1
-#    if (avg_val.shape!=cur_val.shape):
-#        min_len = min(avg_val.shape[0], cur_val.shape[0])
-#        avg_val = avg_val[:min_len]
-#        cur_val = cur_val[:min_len]
         
     return avg_val * param1 + cur_val * param2
-#
-#def initialize_averaged_line_params(lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx):
-#    global lefty_avg
-#    global righty_avg
-#    global leftx_avg
-#    global rightx_avg
-#    global left_fit_avg
-#    global right_fit_avg 
-#    global left_fitx_avg 
-#    global right_fitx_avg
-#    
-#    lefty_avg = lefty
-#    righty_avg = righty
-#    leftx_avg = leftx
-#    rightx_avg = rightx
-#    left_fit_avg = left_fit
-#    right_fit_avg = right_fit
-#    left_fitx_avg = left_fitx
-#    right_fitx_avg = right_fitx    
-#    
-#def lines_averaging(lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx):
-#    global lefty_avg
-#    global righty_avg
-#    global leftx_avg
-#    global rightx_avg
-#    global left_fit_avg
-#    global right_fit_avg 
-#    global left_fitx_avg 
-#    global right_fitx_avg
-#    
-#    lefty_avg = get_running_average(lefty_avg, lefty)
-#    righty_avg = get_running_average(righty_avg, righty)
-#    leftx_avg = get_running_average(leftx_avg, leftx)
-#    rightx_avg = get_running_average(rightx_avg, rightx)
-#    left_fit_avg = get_running_average(left_fit_avg, left_fit)
-#    right_fit_avg = get_running_average(right_fit_avg, right_fit)
-#    left_fitx_avg = get_running_average(left_fitx_avg, left_fitx,)
-#    right_fitx_avg = get_running_average(right_fitx_avg, right_fitx)
-# 
-#def get_averaged_line_params():
-#    global lefty_avg
-#    global righty_avg
-#    global leftx_avg
-#    global rightx_avg
-#    global left_fit_avg
-#    global right_fit_avg 
-#    global left_fitx_avg 
-#    global right_fitx_avg
-#    
-#    return (lefty_avg, righty_avg, leftx_avg, rightx_avg, left_fit_avg, right_fit_avg, left_fitx_avg, right_fitx_avg)
-    
-    
+
 # <markdowncell>
 # ### Initialize global variables
 # <codecell>
-
-#global initial_fit_done
-#global left_fit
-#global right_fit
-#
-#global lefty_avg
-#global righty_avg
-#global leftx_avg
-#global rightx_avg
-#global left_fit_avg
-#global right_fit_avg 
-#global left_fitx_avg 
-#global right_fitx_avg
 
 initial_fit_done=False
 left_fit=0.0
@@ -488,14 +352,6 @@ def initialize_global_vars():
     initial_fit_done = False
     curvature_avg = 0
     
-# <markdowncell>
-# ### Check whether the first coefficients of left and right fit are of the same sign
-# <codecell>
-def sanity_check(left_fit, right_fit):
-    if (left_fit[0]*right_fit[0]<0):
-        return False
-    else:
-        return True
     
 # <markdowncell>
 # ### Find real curvature and center of the car, return final output
@@ -528,7 +384,6 @@ def calc_curvature_and_return_final_img(img, binary_warped, ploty, lefty, righty
     pts_left = np.array([np.flipud(np.transpose(np.vstack([left_fitx, ploty])))])
     pts_right = np.array([np.transpose(np.vstack([right_fitx, ploty]))])
     pts = np.hstack((pts_left, pts_right))
-    #cv2.polylines(color_warp, np.int_([pts]), isClosed=False, color=(0,0,255), thickness = 40)
     cv2.fillPoly(color_warp, np.int_([pts]), (0,255, 0))
     newwarp = cv2.warpPerspective(color_warp, Minv, (binary_warped.shape[1], binary_warped.shape[0]))
     result = cv2.addWeighted(img, 1, newwarp, 0.5, 0)
@@ -540,14 +395,9 @@ def calc_curvature_and_return_final_img(img, binary_warped, ploty, lefty, righty
         curvature_avg = int(get_running_average(curvature_avg, curvature))
     
     font = cv2.FONT_HERSHEY_SIMPLEX
-    #text_radius = 'Radius of curvature is {}m'.format(int(min(left_curverad, right_curverad)))
     text_radius = 'Radius of curvature is {}m'.format(curvature_avg)
     cv2.putText(result,text_radius,(200,100), font, 1,(255,255,255),2)
-    
-#    cv2.putText(result,'Left: {}m, right {}m'.format(left_curverad, right_curverad),(200,250), font, 1,(255,255,255),2)
-    
-    
-    
+        
     if center < 640:
         text_position = 'Vehicle is {:.2f}m left of center'.format(center*3.7/700)
     else:
@@ -561,38 +411,20 @@ def calc_curvature_and_return_final_img(img, binary_warped, ploty, lefty, righty
         plt.text(200, 100, text_position,
         style='italic', color='white', fontsize=10)       
         plt.text(200, 175, text_radius, style='italic', color='white', fontsize=10)
-      
-   
+         
 
     return result
     
 # <markdowncell>
 # ### Main pipeline
 # <codecell>       
-count = 1
-
-def process_pipeline(img):
-    global initial_fit_done
-    global left_fit
-    global right_fit
-    global count
-   
+def process_pipeline(img):   
     warp_binary_img, M, Minv = warp_binary(img)
-#    if (initial_fit_done==False):
     ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx = fit_lanes(warp_binary_img)
-#    else:
-#        ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx = fit_lanes2(warp_binary_img)
 
-
-#        ploty = fit_lanes2(warp_binary_img)
-    
-#    lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx = get_averaged_line_params()
-    
     result = calc_curvature_and_return_final_img(img, warp_binary_img, ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx, Minv)
-    count = count + 1
     
     return result
-    
 
 # <markdowncell>
 # ### Client code starts here
@@ -628,61 +460,36 @@ for image_name in glob.glob('test_images/test*.jpg'):
 # <markdowncell>
 # ### Process one test image
 # <codecell>
-img = cv2.imread('test_images/test_video3.png')
+img = cv2.imread('test_images/test5.jpg')
+img=conv2RGB(img)
 img_processed = process_pipeline(img)
 fig = plt.figure(figsize = (8,4))
 plt.imshow(img_processed)
 
-
 # <markdowncell>
 # ### Process one test image
 # <codecell>
-initialize_global_vars()
-
-
-for image_name in glob.glob('test_images/test_video*.png'):
-    img = cv2.imread(image_name)
-    img=conv2RGB(img)
-    img_processed = process_pipeline(img)
-    fig = plt.figure(figsize = (8,4))
-    plt.imshow(img_processed) 
-
-# <markdowncell>
-# ### Process one test image
-# <codecell>
-image_name='test_images/straight_lines1.jpg'
-#image_name='test_images/test_from_vid11.png'
-image_name='test_images/test5.jpg'
-image_name='test_images/test_video19.png'
+image_name='test_images/test6.jpg'
 img = cv2.imread(image_name)
 img=conv2RGB(img)
 warp_binary_img, M, Minv = warp_binary(img, True, False, image_name)
 
 ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx = fit_lanes(warp_binary_img, True)
 
-#ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx  = fit_lanes2(warp_binary_img)
-#lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx = get_averaged_line_params()
-
 final_image = calc_curvature_and_return_final_img(img, warp_binary_img, ploty, lefty, righty, leftx, rightx, left_fit, right_fit, left_fitx, right_fitx, Minv, False)
 
 fig = plt.figure(figsize = (8,4))
 plt.imshow(final_image)
-#    
     
 # <markdowncell>
 # ### Process video stream
 # <codecell>
-### Import everything needed to edit/save/watch video clips
-#from moviepy.editor import VideoFileClip
-#from IPython.display import HTML
-#from IPython import get_ipython
 # Set up lines for left and right
 initialize_global_vars()
 video_output = 'project_video_output.mp4'
 clip1 = VideoFileClip("project_video.mp4")
 white_clip = clip1.fl_image(process_pipeline) #NOTE: this function expects color images!!
 
-#get_ipython().magic('time white_clip.write_videofile(video_output, audio=False)')
 white_clip.write_videofile(video_output, audio=False)
         
     
